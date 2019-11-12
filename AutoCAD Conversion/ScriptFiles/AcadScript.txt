@@ -1,0 +1,9 @@
+attdia 1
+filedia 1
+dwgcheck 1
+secureload 0
+(load "{0}")
+attdia 0
+cmddia 0
+filedia 0
+dwgcheck 0

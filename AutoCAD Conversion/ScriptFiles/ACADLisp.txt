@@ -1,0 +1,105 @@
+
+
+(defun Sub_PrintExtents(Str_FileSaveLocation Str_PrinterName Str_PaperSize Str_CTB )
+	(if (= "Model" (getvar "ctab"))
+		(command "-plot" "y"  (getvar "ctab") "DWG To PDF.pc3" Str_PaperSize "Millimeters" "LandScape" "No" "Extents" "Fit" "center" "Yes" Str_CTB "Yes" "As displayed" Str_FileSaveLocation "No"  "Yes")
+		(command "-plot" "y"  (getvar "ctab") "DWG To PDF.pc3" Str_PaperSize "Millimeters" "LandScape" "No" "Extents" "Fit" "center" "Yes" Str_CTB "Yes" "No" "No" "No" Str_FileSaveLocation "No" "Yes")	
+	)		
+)
+(defun Sub_PrintObject  (Str_PrinterName Str_PaperSize Str_CTB Object Vla_Space STR_FILESAVELOCATION / MAXP MINP PT_2NDPOINT PT_FIRSTPOINT )
+
+	(if (not Str_PrinterName)		(setq Str_PrinterName "Default Windows System Printer.pc3"))
+	
+	
+	(if (not (= 'VLA-OBJECT (type Object)))
+		(setq Object (vlax-ename->vla-object Object))
+	)
+	
+
+	(setvar "ctab" (vla-get-name Vla_Space))
+	  	
+	 
+	(vla-getBoundingBox Object 'Minp 'Maxp)	
+	
+	(setq Pt_FirstPoint (trans (list (car (vlax-safearray->list Minp))(cadr (vlax-safearray->list Minp))) 0 1) ;Translate points from ucs to wcs, So that command functions will work.
+		Pt_2ndPoint (trans (list (car(vlax-safearray->list Maxp))(cadr(vlax-safearray->list Maxp))) 0 1) 
+	)
+  	
+	
+	
+	(if (and Pt_FirstPoint Pt_2ndPoint)
+		(progn
+			(setvar "cmdecho" 0)
+			(setvar "nomutt" 1)
+			
+			(if (= "DWG To PDF.pc3" Str_PrinterName)
+				;		PDF print, Saves to a location
+				(if (= "Model" (getvar "ctab"))
+					(vl-cmdf "_.plot" "y"  (getvar "ctab") Str_PrinterName Str_PaperSize "Millimeters" "LandScape" "No" "Window" Pt_FirstPoint Pt_2ndPoint "Fit" "center" "Yes" Str_CTB "Yes" "No" Str_FileSaveLocation "No"  "Yes")
+					(vl-cmdf "_.plot" "y"  (getvar "ctab") Str_PrinterName Str_PaperSize "Millimeters" "LandScape" "No" "Window" Pt_FirstPoint Pt_2ndPoint "Fit" "center" "Yes" Str_CTB "Yes" "No" "No" "No" Str_FileSaveLocation "No" "Yes")	
+				)
+				;				 Normal print
+				(if (= "Model" (getvar "ctab"))
+					(vl-cmdf "_.plot" "y"  (getvar "ctab") Str_PrinterName Str_PaperSize "Millimeters" "LandScape" "No" "Window" Pt_FirstPoint Pt_2ndPoint "Fit" "center" "Yes" Str_CTB "Yes" "No" "No" "No" "Yes")
+					(vl-cmdf "_.plot" "y"  (getvar "ctab") Str_PrinterName Str_PaperSize "Millimeters" "LandScape" "No" "Window" Pt_FirstPoint Pt_2ndPoint "Fit" "center" "Yes" Str_CTB "Yes" "No" "No" "No" "No" "No" "Yes")	
+				)
+			)
+			(setvar "cmdecho" 1)
+			(setvar "nomutt" 0)
+		)
+	)
+	(princ "File printed")
+)
+
+
+
+
+(defun PrintDrawingsToPDF (/ Lst_TitleBlocks Str_TitleBlock Str_FileSaveLocationCount)
+	(princ "\nLoaded")
+	(setq 
+			dwgname (getvar "dwgname")
+			dwgname (substr dwgname 1 (- (strlen dwgname) 4))
+			Str_FileSaveLocation {0}	
+		 Count 0
+	 )
+	 ;	Str_FileSaveLocation (strcat (strcat "C:\\tmp\\" dwgname) ".pdf")		
+	 ;(getvar "dwgprefix")
+	(princ "\nSave location defined")
+		
+	(setq Lst_TitleBlocks (ssget "_X" '((2 . "Square"))))
+	
+	(if Lst_TitleBlocks	
+		(progn
+			(princ "\nTitleBlocks found")
+			(setq Str_OldTab (getvar "ctab"))
+			
+			
+			(setq count 0)
+			(while (> (sslength Lst_TitleBlocks) count)
+				(setq ent (entget (ssname Lst_TitleBlocks count)))
+				(setq count (+ count 1))
+				
+				(getvar "ctab" (cdr(assoc '410 ent))) ;Change to space, then print extents
+				
+				Sub_PrintExtents(Str_FileSaveLocation, "DWG To PDF.pc3", "ISO full bleed A3 (420.00 x 297.00 MM)", "IAC.ctb")
+			)
+			
+			;(foreach Lst_Item Lst_TitleBlocks
+			;	(Sub_PrintObject "DWG To PDF.pc3" "ISO full bleed A3 (420.00 x 297.00 MM)" "IAC.ctb" (cadr Lst_Item) (car Lst_Item) Str_FileSaveLocation)				
+			;)
+			(setvar "ctab" Str_OldTab)
+		)
+		(progn
+			(princ "\n No titleblocks found, printing extents")			
+			(if (= "Model" (getvar "ctab"))
+				(command "-plot" "y"  (getvar "ctab") "DWG To PDF.pc3" "ISO full bleed A3 (420.00 x 297.00 MM)" "Millimeters" "LandScape" "No" "Extents" "Fit" "center" "Yes" "IAC.ctb" "Yes" "As displayed" Str_FileSaveLocation "No"  "Yes")
+				(command "-plot" "y"  (getvar "ctab") "DWG To PDF.pc3" "ISO full bleed A3 (420.00 x 297.00 MM)" "Millimeters" "LandScape" "No" "Extents" "Fit" "center" "Yes" "IAC.ctb" "Yes" "No" "No" "No" Str_FileSaveLocation "No" "Yes")	
+			)			
+		)
+	)
+	(princ)
+)
+(vl-load-com)
+(princ "Loaded")
+(PrintDrawingsToPDF)
+(princ "Printed")
