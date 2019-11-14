@@ -17,31 +17,29 @@ namespace AutoCADConversion
     [Guid("51B90262-FEAE-4F6B-9FD8-15625DF9595E"), ComVisible(true)]
     public class PDMAddin : IEdmAddIn5
     {
-     internal static   NLog.Logger log = NLog.LogManager.GetLogger("AutoCAD Converter");
+        
+
+        internal static NLog.Logger log = NLog.LogManager.GetLogger("AutoCAD Converter");
         public static IEdmVault20 Vault { get; private set; }
         public static IEdmCmdMgr5 CmdMgr { get; private set; }
         public static EdmAddInInfo Info { get; private set; }
         public void GetAddInInfo(ref EdmAddInInfo poInfo, IEdmVault5 poVault, IEdmCmdMgr5 poCmdMgr)
         {
+            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("MTcwMjQwQDMxMzcyZTMzMmUzMGhycFlDaldXNDVZeWxhdnFwckswQnRhMHVwclp2OWNrUEltNHczb21ENDQ9;MTcwMjQxQDMxMzcyZTMzMmUzMG4xOFQ1dnBDR1oxalUvazM5UmlTRkdUelJRcHkweURnVERXRXRabnpaZVE9");
+
             Vault = (IEdmVault20)poVault;
             CmdMgr = poCmdMgr;
             Info = poInfo;
 
             //Specify information to display in the add-in's Properties dialog box
-            poInfo.mbsAddInName = "IAC Debug Add-in2";
-            poInfo.mbsCompany = "IAC";
-            poInfo.mbsDescription = "This is a debug testing for IAC addin";
-            poInfo.mlAddInVersion = 10;
+            poInfo.mbsAddInName = "PDM DWG Converter";
+            poInfo.mbsCompany = "FlowerRobot";
+            poInfo.mbsDescription = "This will convert dwgs to dxf and pdf";
+            poInfo.mlAddInVersion = 19;
 
             //Specify the minimum required version of SolidWorks PDM Professional
-            poInfo.mlRequiredVersionMajor = 11;
+            poInfo.mlRequiredVersionMajor = 10;
             poInfo.mlRequiredVersionMinor = 1;
-
-            // Register a menu command
-            // poCmdMgr.AddCmd(1, "C# Add-in", (int)EdmMenuFlags.EdmMenu_ShowInMenuBarTools);
-
-            poCmdMgr.AddHook(EdmCmdType.EdmCmd_CardButton);
-
 
             //Register this add-in as a task add-in
             poCmdMgr.AddHook(EdmCmdType.EdmCmd_TaskRun);
@@ -66,7 +64,12 @@ namespace AutoCADConversion
         {
             try
             {
-                PauseToAttachProcess(poCmd.meCmdType.ToString());
+#if DEBUG
+                if (Environment.UserName.Equals("seth.ruhan", StringComparison.OrdinalIgnoreCase) || Environment.UserName.Equals(@"colpro\seth.ruhan", StringComparison.OrdinalIgnoreCase))
+                {
+                    PauseToAttachProcess(poCmd.meCmdType.ToString());
+                }
+#endif
 
                 // Handle the menu command
                 switch (poCmd.meCmdType)
@@ -78,21 +81,23 @@ namespace AutoCADConversion
                                 // ClickToRunTask(poCmd);
                                 break;
                         }
-                        break;
-                    case EdmCmdType.EdmCmd_CardButton:
-                        break;
+                        break;                   
                     case EdmCmdType.EdmCmd_TaskRun:
                         OnTaskRun(ref poCmd, ref ppoData);
                         break;
-                    case EdmCmdType.EdmCmd_TaskSetup:
+                    case EdmCmdType.EdmCmd_TaskSetup: //Called when a new task in the administrator is created (not saved tho)
                         OnTaskSetup(ref poCmd, ref ppoData);
                         break;
                     case EdmCmdType.EdmCmd_TaskDetails:
                         OnTaskDetails(ref poCmd, ref ppoData);
                         break;
                     case EdmCmdType.EdmCmd_TaskLaunch:
+                        OnTaskSetupButton(ref poCmd, ref ppoData);
+                        break;
                     case EdmCmdType.EdmCmd_TaskLaunchButton:
-                    case EdmCmdType.EdmCmd_TaskSetupButton:
+                        OnTaskSetupButton(ref poCmd, ref ppoData);
+                        break;
+                    case EdmCmdType.EdmCmd_TaskSetupButton: //The Okay or cancel on the Task form in the administrator is pushed
                         OnTaskSetupButton(ref poCmd, ref ppoData);
                         break;
                 }
@@ -109,31 +114,23 @@ namespace AutoCADConversion
             }
         }
 
-        //public void ClickToRunTask(EdmCmd poCmd)
-        //{
-        //    var vault = (IEdmVault19)poCmd.mpoVault;
-        //    IEdmTaskMgr TaskMgr = (IEdmTaskMgr)vault.CreateUtility(EdmUtility.EdmUtil_TaskMgr);
-        //    //var Tasks = 
-
-        //    foreach(EdmTaskInfo task in TaskMgr.GetTasks())
-        //    {
-        //        if(task.mbsTaskName == "MyTask")
-        //        {
-        //            TaskMgr.RunTask(task, null, 0);
-        //        }
-        //    }
-
-        //}
-
         private void OnTaskRun(ref EdmCmd poCmd, ref EdmCmdData[] ppoData)
         {
             //Get the task instance interface
             IEdmTaskInstance inst = poCmd.mpoExtra as IEdmTaskInstance;
+
             if (inst == null)
                 return;
             try
             {
-                var tas = new AutoCADTaskAddin(poCmd, ppoData);
+                AutoCADTaskSettings taskSettings;
+                string settings = inst.GetValEx(AutoCADTaskSettings.Acadtask_Settings) as string;
+                if (!string.IsNullOrEmpty(settings))
+                    taskSettings = JsonConvert.DeserializeObject<AutoCADTaskSettings>(settings);
+                else
+                    taskSettings = new AutoCADTaskSettings();
+
+                var tas = new AutoCADTaskAddin(poCmd, ppoData, taskSettings);
                 tas.runTask();
             }
             catch (System.Runtime.InteropServices.COMException ex)
@@ -159,11 +156,22 @@ namespace AutoCADConversion
                 //Get the settings for exist task               
                 try
                 {
-                    taskSettings = JsonConvert.DeserializeObject<AutoCADTaskSettings>(props.GetValEx(AutoCADTaskSettings.Acadtask_Settings) as string);
+                    string res = props.GetValEx(AutoCADTaskSettings.Acadtask_Settings) as string;
+                    if (!string.IsNullOrEmpty(res))                       
+                        taskSettings = JsonConvert.DeserializeObject<AutoCADTaskSettings>(res);
                 }
                 catch
                 {
+                   
+                }
+                if(taskSettings == null)
+                {
                     taskSettings = new AutoCADTaskSettings();
+                    taskSettings.CreateMenu = true;
+                    taskSettings.CreatePDF = true;
+                    taskSettings.MenuDescription = "Convert AutoCAD";
+                    taskSettings.MenuName = "Convert AutoCAD";
+                    
                 }
 
                 //Set the property flag that says you want a
@@ -175,19 +183,19 @@ namespace AutoCADConversion
 
                 EdmTaskSetupPage[] setupPages = new EdmTaskSetupPage[2];
                 setupPages[0].mbsPageName = "Menus Command";
-                setupPages[0].mbsPageName = "TitleBlocks";
+                setupPages[1].mbsPageName = "TitleBlocks";
                 //pages[0].mlPageHwnd = SetupPageObj.Handle.ToInt32();
                 //pages[0].mpoPageImpl = SetupPageObj;
                 props.SetSetupPages(setupPages);
             }
             catch (System.Runtime.InteropServices.COMException ex)
             {
-                System.IO.File.OpenWrite(@"C:\temp\errorfile.text");
+                log.Error(ex);
                 // MessageBox.Show("HRESULT = 0x" + ex.ErrorCode.ToString("X") + ex.Message);
             }
             catch (Exception ex)
             {
-                System.IO.File.OpenWrite(@"C:\temp\errorfile.text");
+                log.Error(ex);
                 //MessageBox.Show(ex.Message);
             }
         }
@@ -218,7 +226,7 @@ namespace AutoCADConversion
 
                     props.SetValEx(AutoCADTaskSettings.Acadtask_Settings, JsonConvert.SerializeObject(taskSettings));
                 }
-                taskSettings = null;
+               
             }
             catch (System.Runtime.InteropServices.COMException ex)
             {
@@ -227,6 +235,10 @@ namespace AutoCADConversion
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message);
+            }
+            finally
+            {
+                taskSettings = null;
             }
         }
         private void OnTaskDetails(ref EdmCmd poCmd, ref EdmCmdData[] ppoData)

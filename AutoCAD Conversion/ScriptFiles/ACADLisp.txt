@@ -66,7 +66,7 @@
 	 ;(getvar "dwgprefix")
 	(princ "\nSave location defined")
 		
-	(setq Lst_TitleBlocks (ssget "_X" '((2 . "Square"))))
+	(setq Lst_TitleBlocks (ssget "_X" '((-4 . "<OR")(2 . "IAC A1")(2 . "IAC A2")(2 . "IAC A3")(2 . "IAC A4")(2 . "Penske A1")(2 . "EPSA A1")(2 . "IAC UK A1")(-4 . "OR>"))))
 	
 	(if Lst_TitleBlocks	
 		(progn
@@ -78,10 +78,24 @@
 			(while (> (sslength Lst_TitleBlocks) count)
 				(setq ent (entget (ssname Lst_TitleBlocks count)))
 				(setq count (+ count 1))
+				(setq thisFile Str_FileSaveLocation)
 				
-				(getvar "ctab" (cdr(assoc '410 ent))) ;Change to space, then print extents
+				(if (> (sslength Lst_TitleBlocks) 1)
+					(if (> count 1)
+						(setq thisFile
+							(strcat
+								(vl-filename-directory Str_FileSaveLocation)
+								"\\"
+								(vl-filename-base Str_FileSaveLocation)
+								(rtos count 2 0)
+								(vl-filename-extension Str_FileSaveLocation)))
+							)
+				)	
 				
-				Sub_PrintExtents(Str_FileSaveLocation, "DWG To PDF.pc3", "ISO full bleed A3 (420.00 x 297.00 MM)", "IAC.ctb")
+					(setvar "ctab" (cdr(assoc '410 ent))) ;Change to space, then print extents
+				
+					(Sub_PrintExtents thisFile  "DWG To PDF.pc3" "ISO full bleed A3 (420.00 x 297.00 MM)" "IAC.ctb")
+				
 			)
 			
 			;(foreach Lst_Item Lst_TitleBlocks
@@ -97,6 +111,19 @@
 			)			
 		)
 	)
+	(command "_.saveas" "DXF" 16
+				(strcat
+					(vl-filename-directory Str_FileSaveLocation)
+					"\\"
+					(vl-filename-base Str_FileSaveLocation)					
+					".dxf"))
+	(if (> 0 (getvar "CMDACTIVE"))
+					(command "_Y"))
+
+	(command "_.close")
+  	(while (if (> 0 (getvar "CMDACTIVE"))
+					(command "_n")))
+	  
 	(princ)
 )
 (vl-load-com)
